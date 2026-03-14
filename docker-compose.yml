@@ -1,0 +1,84 @@
+services:
+
+  # ─── PostgreSQL Database ────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: purpleassetone_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: purpleassetone
+      POSTGRES_USER: purpleassetone
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-purpleassetone_secure_pw}
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD:-pa1_app_changeme}
+    volumes:
+      - ${STORAGE}/postgres:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./postgres/init-roles.sh:/docker-entrypoint-initdb.d/02-init-roles.sh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U purpleassetone -d purpleassetone"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ─── Python FastAPI Backend ─────────────────────────────────────
+  backend:
+    build: ./backend
+    container_name: purpleassetone_api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      # App user (least-privilege) — used for all API operations
+      DATABASE_URL: postgresql://pa1_app:${DB_APP_PASSWORD:-pa1_app_changeme}@db:5432/purpleassetone
+      # Owner user — used only for bootstrap migrations on startup
+      DATABASE_OWNER_URL: postgresql://purpleassetone:${DB_PASSWORD:-purpleassetone_secure_pw}@db:5432/purpleassetone
+      SECRET_KEY: ${SECRET_KEY:-change-this-secret-key-in-production}
+      APPDATA_DIR: /appdata
+      # Initial superadmin — created on first startup if no users exist
+      INIT_SUPERADMIN_USER: ${INIT_SUPERADMIN_USER:-superadmin}
+      INIT_SUPERADMIN_PASSWORD: ${INIT_SUPERADMIN_PASSWORD:-admin123}
+      # S3 Storage
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://minio:9000}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-purpleassetone}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-purpleassetone_minio_pw}
+      S3_BUCKET: ${S3_BUCKET:-purpleassetone}
+      S3_PUBLIC_URL: ${S3_PUBLIC_URL:-}
+    volumes:
+      - ${STORAGE}:/appdata
+    ports:
+      - "8000:8000"
+
+  # ─── MinIO (local S3-compatible storage) ────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: purpleassetone_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:-purpleassetone}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:-purpleassetone_minio_pw}
+    volumes:
+      - ${STORAGE}/minio:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ─── Nginx (unified portal) ─────────────────────────────────────
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    container_name: purpleassetone_nginx
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
