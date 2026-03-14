@@ -80,9 +80,7 @@ The portal is available at `http://<host-ip>:8080`.
 
 ## Default Credentials
 
-| Username | Password | Role |
-|---|---|---|
-| `superadmin` | `admin123` | Super Admin |
+NOW SET VIA ENVIRONMENTAL VARIABLES 
 
 ---
 
