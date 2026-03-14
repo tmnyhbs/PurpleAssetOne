@@ -4,6 +4,12 @@ A self-hosted workshop asset and repair management system. Track equipment, mana
 
 ---
 
+## AI Disclaimer
+
+This app is a proof of concept that was put together quickly with assistance by Claude, using Opus 4.6 and Sonnet 4.6 models. This is pre-release software and is NOT safe for production use. I have begun manually working through a lot of the code to ensure it meets security standards and will be able to be maintained on an ongoing basis. 
+
+---
+
 ## Table of Contents
 
 - [Stack](#stack)
