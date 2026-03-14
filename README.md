@@ -91,7 +91,7 @@ NOW SET VIA ENVIRONMENTAL VARIABLES
 Roles are ordered from least to most privileged:
 
 ```
-Viewer  <  Member  <  Authorizer  <  Technician  <  Admin  <  Super Admin
+Viewer  <  Member  <  Authorizer  <  Technician  <  Area Host  <  Admin  <  Super Admin
 ```
 
 ### 35 Named Permissions
