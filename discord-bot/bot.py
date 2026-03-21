@@ -149,7 +149,11 @@ class PA1Bot(discord.Client):
         # Register all commands dynamically from config
         _register_commands(self)
 
-        guild_ids = [int(g.strip()) for g in GUILD_IDS_STR.split(",") if g.strip()]
+        guild_ids = []
+        for g in GUILD_IDS_STR.split(","):
+            g = g.strip()
+            if g.isdigit():
+                guild_ids.append(int(g))
         for gid in guild_ids:
             guild = discord.Object(id=gid)
             self.tree.copy_global_to(guild=guild)
@@ -234,6 +238,7 @@ class TicketModal(discord.ui.Modal):
         if prio not in ("low", "normal", "high", "critical"):
             prio = "normal"
 
+        # Step 1: Create the ticket via API
         try:
             ticket = await bot.api.create_ticket(
                 equipment_id=self.equipment_id,
@@ -242,16 +247,28 @@ class TicketModal(discord.ui.Modal):
                 priority=prio,
                 metadata={"discord_channel_id": str(interaction.channel_id), "created_via": "discord"},
             )
+        except Exception as e:
+            await interaction.followup.send(f"❌ Failed to create ticket: {e}", ephemeral=True)
+            return
 
-            embed = _ticket_embed(ticket, self.equipment_name, "New Repair Ticket Created")
-            msg = await interaction.followup.send(embed=embed)
+        # Step 2: Post the embed (ticket is already created at this point)
+        embed = _ticket_embed(ticket, self.equipment_name, "New Repair Ticket Created")
+        msg = await interaction.followup.send(embed=embed, wait=True)
 
-            # Auto-thread
-            thread_cfg = CFG.get("auto_thread", {})
-            if thread_cfg.get("enabled", True):
+        # Step 3: Create a discussion thread (non-fatal if it fails)
+        thread_cfg = CFG.get("auto_thread", {})
+        if thread_cfg.get("enabled", True):
+            try:
                 archive = thread_cfg.get("archive_duration", 4320)
-                thread = await msg.create_thread(
-                    name=f"{ticket.get('ticket_number', 'Ticket')} — {self.ticket_title.value[:80]}",
+                # Get the full channel object through the bot's cache/API
+                channel = bot.get_channel(interaction.channel_id)
+                if channel is None:
+                    channel = await bot.fetch_channel(interaction.channel_id)
+                thread_name = f"{ticket.get('ticket_number', 'Ticket')} — {self.ticket_title.value[:80]}"
+                # Create thread directly on the channel, attached to our message
+                thread = await channel.create_thread(
+                    name=thread_name,
+                    message=discord.Object(id=msg.id),
                     auto_archive_duration=archive,
                 )
                 thread_map[str(thread.id)] = {
@@ -269,9 +286,16 @@ class TicketModal(discord.ui.Modal):
                 welcome = welcome.replace("{ticket_number}", ticket.get("ticket_number", "?"))
                 welcome = welcome.replace("{addnote_cmd}", cmd_name("add_note", "addnote"))
                 await thread.send(welcome)
-
-        except Exception as e:
-            await interaction.followup.send(f"❌ Failed to create ticket: {e}", ephemeral=True)
+            except Exception as e:
+                log.warning(f"Ticket created but thread creation failed: {type(e).__name__}: {e}", exc_info=True)
+                try:
+                    await interaction.followup.send(
+                        f"⚠️ Ticket **{ticket.get('ticket_number')}** was created, but I couldn't create a discussion thread. "
+                        f"Check that I have **Create Public Threads**, **Send Messages in Threads**, and **Read Message History** permissions in this channel.",
+                        ephemeral=True,
+                    )
+                except Exception:
+                    pass
 
 
 # ─────────────────────────────────────────

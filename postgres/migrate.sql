@@ -339,7 +339,7 @@ DECLARE
     _changed  TEXT[];
 BEGIN
     _user_id := current_setting('app.current_user_id', true);
-    _role    := current_setting('app.current_role', true);
+    _role    := current_setting('app.session_role', true);
     IF TG_OP = 'DELETE' THEN
         _old := to_jsonb(OLD); _record_id := COALESCE(_old->>'id', _old->>'key', '');
         INSERT INTO audit_log (table_name, record_id, operation, user_id, user_role, old_data)
@@ -392,12 +392,12 @@ DROP POLICY IF EXISTS users_select ON users; CREATE POLICY users_select ON users
 DROP POLICY IF EXISTS users_insert ON users; CREATE POLICY users_insert ON users FOR INSERT WITH CHECK (true);
 DROP POLICY IF EXISTS users_update ON users; CREATE POLICY users_update ON users FOR UPDATE USING (
     role != 'superadmin'
-    OR current_setting('app.current_role', true) = 'superadmin'
-    OR COALESCE(current_setting('app.current_role', true), '') = ''
+    OR current_setting('app.session_role', true) = 'superadmin'
+    OR COALESCE(current_setting('app.session_role', true), '') = ''
 );
 DROP POLICY IF EXISTS users_delete ON users; CREATE POLICY users_delete ON users FOR DELETE USING (
-    current_setting('app.current_role', true) = 'superadmin'
-    OR COALESCE(current_setting('app.current_role', true), '') = ''
+    current_setting('app.session_role', true) = 'superadmin'
+    OR COALESCE(current_setting('app.session_role', true), '') = ''
 );
 
 -- 6. Row-Level Security on app_config
@@ -406,11 +406,11 @@ ALTER TABLE app_config FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS config_select ON app_config; CREATE POLICY config_select ON app_config FOR SELECT USING (true);
 DROP POLICY IF EXISTS config_insert ON app_config; CREATE POLICY config_insert ON app_config FOR INSERT WITH CHECK (
     key NOT IN ('permissions', 'auth_config')
-    OR current_setting('app.current_role', true) = 'superadmin'
-    OR COALESCE(current_setting('app.current_role', true), '') = ''
+    OR current_setting('app.session_role', true) = 'superadmin'
+    OR COALESCE(current_setting('app.session_role', true), '') = ''
 );
 DROP POLICY IF EXISTS config_update ON app_config; CREATE POLICY config_update ON app_config FOR UPDATE USING (
     key NOT IN ('permissions', 'auth_config')
-    OR current_setting('app.current_role', true) = 'superadmin'
-    OR COALESCE(current_setting('app.current_role', true), '') = ''
+    OR current_setting('app.session_role', true) = 'superadmin'
+    OR COALESCE(current_setting('app.session_role', true), '') = ''
 );

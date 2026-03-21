@@ -126,15 +126,13 @@ async def db_conn():
     async with pool.acquire() as conn:
         uid = _ctx_user_id.get('')
         role = _ctx_role.get('')
-        # SET (not SET LOCAL) — persists for the connection session
-        await conn.execute(f"SET app.current_user_id = '{uid}'")
-        await conn.execute(f"SET app.current_role = '{role}'")
+        await conn.execute("SELECT set_config('app.current_user_id', $1, false)", uid or '')
+        await conn.execute("SELECT set_config('app.session_role', $1, false)", role or '')
         try:
             yield conn
         finally:
-            # Reset so the next request doesn't inherit stale context
-            await conn.execute("SET app.current_user_id = ''")
-            await conn.execute("SET app.current_role = ''")
+            await conn.execute("SELECT set_config('app.current_user_id', '', false)")
+            await conn.execute("SELECT set_config('app.session_role', '', false)")
 
 
 app = FastAPI(title="PurpleAssetOne API", lifespan=lifespan)
