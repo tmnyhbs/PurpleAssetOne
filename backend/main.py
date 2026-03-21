@@ -128,13 +128,13 @@ async def db_conn():
         role = _ctx_role.get('')
         # SET (not SET LOCAL) — persists for the connection session
         await conn.execute(f"SET app.current_user_id = '{uid}'")
-        await conn.execute(f"SET app.session_role = '{role}'")
+        await conn.execute(f"SET app.current_role = '{role}'")
         try:
             yield conn
         finally:
             # Reset so the next request doesn't inherit stale context
             await conn.execute("SET app.current_user_id = ''")
-            await conn.execute("SET app.session_role = ''")
+            await conn.execute("SET app.current_role = ''")
 
 
 app = FastAPI(title="PurpleAssetOne API", lifespan=lifespan)

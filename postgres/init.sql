@@ -259,7 +259,7 @@ DECLARE
 BEGIN
     -- Read session context (set by the application per-request)
     _user_id := current_setting('app.current_user_id', true);
-    _role    := current_setting('app.session_role', true);
+    _role    := current_setting('app.current_role', true);
 
     IF TG_OP = 'DELETE' THEN
         _old := to_jsonb(OLD);
@@ -324,13 +324,13 @@ CREATE POLICY users_insert ON users FOR INSERT WITH CHECK (true);
 CREATE POLICY users_update ON users FOR UPDATE USING (
     -- Superadmin rows can only be updated if current session is superadmin
     role != 'superadmin'
-    OR current_setting('app.session_role', true) = 'superadmin'
+    OR current_setting('app.current_role', true) = 'superadmin'
     -- Also allow the bootstrap process (no role set yet)
-    OR COALESCE(current_setting('app.session_role', true), '') = ''
+    OR COALESCE(current_setting('app.current_role', true), '') = ''
 );
 CREATE POLICY users_delete ON users FOR DELETE USING (
-    current_setting('app.session_role', true) = 'superadmin'
-    OR COALESCE(current_setting('app.session_role', true), '') = ''
+    current_setting('app.current_role', true) = 'superadmin'
+    OR COALESCE(current_setting('app.current_role', true), '') = ''
 );
 
 -- App config: protect permissions and auth_config from non-superadmin modification
@@ -340,13 +340,13 @@ ALTER TABLE app_config FORCE ROW LEVEL SECURITY;
 CREATE POLICY config_select ON app_config FOR SELECT USING (true);
 CREATE POLICY config_insert ON app_config FOR INSERT WITH CHECK (
     key NOT IN ('permissions', 'auth_config')
-    OR current_setting('app.session_role', true) = 'superadmin'
-    OR COALESCE(current_setting('app.session_role', true), '') = ''
+    OR current_setting('app.current_role', true) = 'superadmin'
+    OR COALESCE(current_setting('app.current_role', true), '') = ''
 );
 CREATE POLICY config_update ON app_config FOR UPDATE USING (
     key NOT IN ('permissions', 'auth_config')
-    OR current_setting('app.session_role', true) = 'superadmin'
-    OR COALESCE(current_setting('app.session_role', true), '') = ''
+    OR current_setting('app.current_role', true) = 'superadmin'
+    OR COALESCE(current_setting('app.current_role', true), '') = ''
 );
 
 -- ═════════════════════════════════════════

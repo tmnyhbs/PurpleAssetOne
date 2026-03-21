@@ -1,0 +1,108 @@
+# ─────────────────────────────────────────────────────────────────
+# PurpleAssetOne Discord Bot — Configuration
+# ─────────────────────────────────────────────────────────────────
+# All slash command names, descriptions, and bot behavior can be
+# customized here. Changes require a bot restart to take effect.
+#
+# Mount this file into the container at /data/config.yaml to override
+# the defaults. Any missing keys fall back to the built-in defaults.
+# ─────────────────────────────────────────────────────────────────
+
+# ── Slash Command Names & Descriptions ───────────────────────────
+# Each command has a `name` (the /slash-command) and a `description`
+# shown in Discord's command picker. Names must be lowercase, no
+# spaces, 1-32 chars. Descriptions max 100 chars.
+
+commands:
+  create_ticket:
+    name: repair-ticket
+    description: Create a new repair ticket for a piece of equipment
+    # The parameter label shown in Discord for the equipment selector
+    equipment_param: Search and select the equipment
+
+  add_note:
+    name: addnote
+    description: Add a work log note to an existing repair ticket
+    ticket_param: "Ticket number (e.g. TKT-001000)"
+    note_param: The note to add to the work log
+
+  list_tickets:
+    name: tickets
+    description: List recent open repair tickets
+    status_param: "Filter by status (open, in_progress, on_hold, closed)"
+    default_status: open
+
+  ticket_info:
+    name: ticketinfo
+    description: View full details for a specific ticket
+    ticket_param: "Ticket number (e.g. TKT-001000)"
+
+  search_equipment:
+    name: equipment
+    description: Search equipment by name, make, model, or serial number
+    query_param: Search by name, make, model, or serial number
+
+# ── Modal Text ───────────────────────────────────────────────────
+# Customize the ticket creation modal labels and placeholders.
+
+modal:
+  title: Create Repair Ticket
+  field_title_label: Title
+  field_title_placeholder: Brief description of the issue
+  field_description_label: Description
+  field_description_placeholder: "Detailed description (optional)"
+  field_priority_label: "Priority (low / normal / high / critical)"
+  field_priority_default: normal
+
+# ── Thread Sync ──────────────────────────────────────────────────
+thread_sync:
+  enabled: true
+  # Minimum message length to sync (avoids syncing reactions, emoji-only, etc.)
+  min_message_length: 2
+  # Reaction emoji added to synced messages (set to empty to disable)
+  confirm_reaction: "📝"
+  error_reaction: "❌"
+  # Thread welcome message (supports {ticket_number} and {addnote_cmd} placeholders)
+  welcome_message: >
+    🎫 **Ticket {ticket_number}** is now linked to this thread.
+    Messages posted here will be automatically added as work log entries.
+    Use `/{addnote_cmd}` to add structured notes from any channel.
+
+# ── Auto-Thread ──────────────────────────────────────────────────
+# When a ticket is created, automatically create a thread for discussion.
+auto_thread:
+  enabled: true
+  archive_duration: 4320  # minutes (4320 = 3 days, 1440 = 1 day, 10080 = 7 days)
+
+# ── Equipment Cache ──────────────────────────────────────────────
+equipment_cache:
+  refresh_interval_minutes: 10
+  max_items: 200
+
+# ── Embed Appearance ─────────────────────────────────────────────
+embeds:
+  footer_text: PurpleAssetOne
+  # Priority colors (hex, no 0x prefix)
+  priority_colors:
+    critical: DC3545
+    high: FFC107
+    normal: 0D6EFD
+    low: 6C757D
+  # Priority emoji
+  priority_emoji:
+    critical: "🚨"
+    high: "⚠️"
+    normal: "🔵"
+    low: "⬇️"
+  # Status colors
+  status_colors:
+    open: 0D6EFD
+    in_progress: FFC107
+    on_hold: 6C757D
+    closed: 198754
+  # Equipment status emoji
+  equipment_status_emoji:
+    active: "🟢"
+    under_repair: "🟡"
+    inactive: "⚪"
+    decommissioned: "🔴"

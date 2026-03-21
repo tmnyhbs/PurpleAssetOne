@@ -4,12 +4,6 @@ A self-hosted workshop asset and repair management system. Track equipment, mana
 
 ---
 
-## AI Disclaimer
-
-This app is a proof of concept that was put together quickly with assistance by Claude, using Opus 4.6 and Sonnet 4.6 models. This is pre-release software and is NOT safe for production use. I have begun manually working through a lot of the code to ensure it meets security standards and will be able to be maintained on an ongoing basis. 
-
----
-
 ## Table of Contents
 
 - [Stack](#stack)
@@ -57,16 +51,19 @@ This app is a proof of concept that was put together quickly with assistance by 
 
 ```bash
 git clone <your-repo-url>
-cd purpleassetone
+cd PurpleAssetOne
 cp example.env .env
-nano .env   # set DB_PASSWORD, DB_APP_PASSWORD, INIT_SUPERADMIN_USER, INIT_SUPERADMIN_PASSWORD, STORAGE, and SECRET_KEY at a minimum
+nano .env   # set DB_PASSWORD and SECRET_KEY at minimum
 ```
 
 ### 2. Create persistent data directories
 
 ```bash
-mkdir -p /Your/Directory/from/STORAGE/in/ENV
+mkdir -p /home/purple/.config/appdata/purpleassetone/postgres
+mkdir -p /home/purple/.config/appdata/purpleassetone/minio
 ```
+
+> The bind-mount paths above match the defaults in `docker-compose.yml`. Adjust if deploying to a different user or path.
 
 ### 3. Build and start
 
@@ -80,7 +77,16 @@ The portal is available at `http://<host-ip>:8080`.
 
 ## Default Credentials
 
-NOW SET VIA ENVIRONMENTAL VARIABLES 
+| Username | Password | Role |
+|---|---|---|
+| `superadmin` | `admin123` | Super Admin |
+| `admin` | `admin123` | Admin |
+| `tech1` | `tech123` | Technician |
+| `viewer1` | `view123` | Viewer |
+| `member1` | `pass123` | Member |
+| `auth1` | `pass123` | Authorizer |
+
+**Change all passwords immediately after first login.**
 
 ---
 
@@ -91,7 +97,7 @@ NOW SET VIA ENVIRONMENTAL VARIABLES
 Roles are ordered from least to most privileged:
 
 ```
-Viewer  <  Member  <  Authorizer  <  Technician  <  Area Host  <  Admin  <  Super Admin
+Viewer  <  Member  <  Authorizer  <  Technician  <  Admin  <  Super Admin
 ```
 
 ### 35 Named Permissions
@@ -396,40 +402,18 @@ All notification config is stored as a single JSONB document in `app_config` und
 Copy `example.env` to `.env` and configure:
 
 ```env
-# ─── Database ────────────────────────────────────────────────────
-# Owner password (used for migrations and schema management)
-DB_PASSWORD= ***CHANGEME***
+# Database
+DB_PASSWORD=your_secure_password
 
-# App user password (least-privilege — used for all API operations)
-DB_APP_PASSWORD= ***CHANGEME***
+# API JWT secret — generate with: openssl rand -hex 32
+SECRET_KEY=your_secret_key
 
-# ─── Initial Superadmin ──────────────────────────────────────────
-# Created automatically on first startup if no users exist in the database.
-# Change these before first boot, then change the password via the UI.
-INIT_SUPERADMIN_USER=superadmin
-INIT_SUPERADMIN_PASSWORD= ***CHANGEME***
-
-# ─── Bindmount Storage Location ──────────────────────────────────────────
-STORAGE= ***CHANGEME***
-
-# ─── API ─────────────────────────────────────────────────────────
-# Generate with: openssl rand -hex 32
-SECRET_KEY= ***CHANGEME***
-
-# ─── S3 / File Storage ───────────────────────────────────────────
-# Local MinIO (default) — leave S3_ENDPOINT_URL pointing to minio container
+# S3 / File Storage (default: local MinIO)
 S3_ENDPOINT_URL=http://minio:9000
 S3_ACCESS_KEY_ID=purpleassetone
-S3_SECRET_ACCESS_KEY= ***CHANGEME***
+S3_SECRET_ACCESS_KEY=your_minio_password
 S3_BUCKET=purpleassetone
-S3_PUBLIC_URL=
-
-# For AWS S3 instead of MinIO:
-# - Set S3_ENDPOINT_URL to blank
-# - Set S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY to your AWS credentials
-# - Set S3_BUCKET to your existing bucket name
-# - Set S3_PUBLIC_URL to https://your_bucket.s3.amazonaws.com (or CloudFront URL)
-# - Remove the minio service from docker-compose.yml
+S3_PUBLIC_URL=        # Optional: CDN or public-facing URL prefix
 ```
 
 ### Using AWS S3 instead of MinIO
@@ -448,7 +432,12 @@ S3_PUBLIC_URL=https://your_bucket_name.s3.amazonaws.com
 
 ## Persistent Storage
 
-All data survives container rebuilds via bind mounts defined via STORAGE environment variable.
+All data survives container rebuilds via bind mounts:
+
+| Host path | Container path | Contents |
+|---|---|---|
+| `~/.config/appdata/purpleassetone/postgres` | `/var/lib/postgresql/data` | Database |
+| `~/.config/appdata/purpleassetone/minio` | `/data` | Uploaded files |
 
 ---
 
@@ -544,6 +533,133 @@ Files are stored in MinIO (or S3) and proxied through nginx at `/files/`. Attach
 - Repair tickets
 - Individual work log entries
 - Area records
+
+---
+
+## API Overview
+
+The API runs at port 8000 and is also accessible through nginx at `/api/`. All endpoints except `/api/auth/token`, `/api/config`, `/api/stats`, and `/health` require a Bearer token.
+
+### Auth
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/auth/token` | Login; returns JWT + effective permissions list |
+| `GET` | `/api/auth/me` | Current user info |
+
+### Users
+| Method | Path | Permission |
+|---|---|---|
+| `GET` | `/api/users` | `users.view` |
+| `POST` | `/api/users` | `users.create` |
+| `PATCH` | `/api/users/{id}` | `users.edit` |
+| `DELETE` | `/api/users/{id}` | Superadmin only |
+| `GET/PATCH` | `/api/users/me` | Authenticated |
+| `PATCH` | `/api/users/me/password` | Authenticated |
+| `GET/PATCH` | `/api/users/{id}/profile` | `users.view` / `users.edit` |
+| `PATCH` | `/api/users/{id}/password` | `users.edit` |
+
+### Equipment
+| Method | Path | Permission |
+|---|---|---|
+| `GET` | `/api/equipment` | Public (filtered by `area_id`, `status`, `search`) |
+| `POST` | `/api/equipment` | `equipment.create` |
+| `GET` | `/api/equipment/{id}` | Public |
+| `PATCH` | `/api/equipment/{id}` | `equipment.edit` (optimistic locking via `version`) |
+| `DELETE` | `/api/equipment/{id}` | `equipment.delete` |
+
+### Repair Tickets
+| Method | Path | Permission |
+|---|---|---|
+| `GET` | `/api/tickets` | Public (filtered by `equipment_id`, `assigned_to`) |
+| `POST` | `/api/tickets` | `tickets.create` |
+| `GET` | `/api/tickets/{id}` | Public |
+| `PATCH` | `/api/tickets/{id}` | `tickets.edit` (optimistic locking via `version`) |
+| `DELETE` | `/api/tickets/{id}` | `tickets.delete` |
+| `POST` | `/api/tickets/{id}/worklog` | `tickets.worklog` |
+
+### Areas
+| Method | Path | Permission |
+|---|---|---|
+| `GET` | `/api/areas` | Public |
+| `POST` | `/api/areas` | `areas.create` |
+| `GET` | `/api/areas/{id}` | Public |
+| `PATCH` | `/api/areas/{id}` | `areas.edit` |
+| `DELETE` | `/api/areas/{id}` | `areas.delete` |
+
+### Equipment Groups
+| Method | Path | Permission |
+|---|---|---|
+| `GET` | `/api/equipment-groups` | Authenticated |
+| `POST` | `/api/equipment-groups` | `groups.manage` |
+| `PATCH` | `/api/equipment-groups/{id}` | `groups.manage` |
+| `DELETE` | `/api/equipment-groups/{id}` | `groups.manage` |
+
+### Scheduling
+| Method | Path | Permission |
+|---|---|---|
+| `GET` | `/api/schedules` | Authenticated (filtered by `equipment_id`, `from_time`, `to_time`) |
+| `POST` | `/api/schedules` | Authenticated (booking validation + conflict check) |
+| `DELETE` | `/api/schedules/{id}` | Owner, admin, or superadmin |
+
+### Authorization Sessions
+| Method | Path | Permission |
+|---|---|---|
+| `GET` | `/api/auth-sessions` | Authenticated (filtered by `equipment_id`, `from_time`, `to_time`) |
+| `POST` | `/api/auth-sessions` | Authorizer+ |
+| `GET` | `/api/auth-sessions/{id}` | Authenticated |
+| `PATCH` | `/api/auth-sessions/{id}` | Session authorizer, admin, or superadmin |
+| `DELETE` | `/api/auth-sessions/{id}` | Session authorizer, admin, or superadmin |
+| `POST` | `/api/auth-sessions/{id}/enroll` | Authenticated |
+| `DELETE` | `/api/auth-sessions/{id}/enroll` | Authenticated (self-unenroll) |
+
+### Permissions
+| Method | Path | Permission |
+|---|---|---|
+| `GET` | `/api/permissions/defs` | Authenticated |
+| `PUT` | `/api/permissions/roles` | Superadmin |
+| `GET/PUT` | `/api/permissions/users/{id}` | Superadmin |
+| `POST` | `/api/permissions/reset-role/{role}` | Superadmin |
+
+### Auth Configuration
+| Method | Path | Permission |
+|---|---|---|
+| `GET/PUT` | `/api/auth-config` | Superadmin |
+
+### Notifications
+| Method | Path | Permission |
+|---|---|---|
+| `GET` | `/api/notifications-config` | `system.notifications` |
+| `PUT` | `/api/notifications-config` | `system.notifications` |
+| `POST` | `/api/notifications/test` | `system.notifications` — fires a global test event |
+| `POST` | `/api/notifications/test-webhook` | `system.notifications` — sends test to a specific webhook URL |
+
+### Config & Export
+| Method | Path | Permission |
+|---|---|---|
+| `GET` | `/api/config` | Public |
+| `GET` | `/api/config/{key}` | Public |
+| `PUT` | `/api/config/{key}` | Superadmin (keys: `theme`, `dashboard`, `templates`, `modules`) |
+| `GET` | `/api/stats` | Public |
+| `GET` | `/api/export` | Superadmin |
+| `GET` | `/api/export/csv/{entity}` | Superadmin |
+| `GET` | `/api/export/csv-template/{entity}` | Superadmin |
+| `POST` | `/api/import/csv/{entity}` | Superadmin |
+| `GET` | `/api/export/users-json` | Superadmin |
+| `GET` | `/api/export/profile-json` | Superadmin |
+| `POST` | `/api/import/users-json` | Superadmin |
+| `POST` | `/api/import/json/users` | Superadmin |
+
+### File Uploads
+| Method | Path | Permission |
+|---|---|---|
+| `POST` | `/api/upload` | Authenticated |
+| `DELETE` | `/api/upload/{path}` | Authenticated |
+
+### Health
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/health` | Returns `{"status": "ok"}` |
+| `GET` | `/api/health` | Same as above |
 
 ---
 
