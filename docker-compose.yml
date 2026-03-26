@@ -82,3 +82,19 @@ services:
       - backend
     ports:
       - "8080:80"
+
+  # ─── Discord Bot (optional) ───────────────────────────────────
+  discord-bot:
+    build: ./discord-bot
+    container_name: purpleassetone_discord
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
+      DISCORD_GUILD_IDS: ${DISCORD_GUILD_IDS:-}
+      PA1_API_URL: http://backend:8000
+      PA1_BOT_USER: ${PA1_BOT_USER:-}
+      PA1_BOT_PASSWORD: ${PA1_BOT_PASSWORD:-}
+    volumes:
+      - ${STORAGE}/discord-bot:/data
