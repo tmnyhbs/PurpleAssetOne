@@ -98,5 +98,3 @@ services:
       PA1_BOT_PASSWORD: ${PA1_BOT_PASSWORD:-}
     volumes:
       - ${STORAGE}/discord-bot:/data
-    profiles:
-      - discord
